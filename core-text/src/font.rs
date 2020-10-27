@@ -539,7 +539,8 @@ extern {
     fn CTFontCreateWithFontDescriptor(descriptor: CTFontDescriptorRef, size: CGFloat,
                                       matrix: *const CGAffineTransform) -> CTFontRef;
     //fn CTFontCreateWithFontDescriptorAndOptions
-    //fn CTFontCreateUIFontForLanguage
+    #[cfg(test)]
+    fn CTFontCreateUIFontForLanguage(uiType: CTFontUIFontType, size: CGFloat, language: CFStringRef) -> CTFontRef;
     fn CTFontCreateCopyWithAttributes(font: CTFontRef, size: CGFloat, matrix: *const CGAffineTransform,
                                       attributes: CTFontDescriptorRef) -> CTFontRef;
     fn CTFontCreateCopyWithSymbolicTraits(font: CTFontRef,
@@ -660,3 +661,37 @@ fn copy_font() {
     assert_eq!(font.family_name(), "Zapf Dingbats");
 }
 
+#[cfg(test)]
+fn macos_version() -> (i32, i32, i32) {
+    use std::io::Read;
+
+    let file = "/System/Library/CoreServices/SystemVersion.plist";
+    let mut f = std::fs::File::open(file).unwrap();
+    let mut system_version_data = Vec::new();
+    f.read_to_end(&mut system_version_data).unwrap();
+    use core_foundation::propertylist;
+    let (list, _) = propertylist::create_with_data(core_foundation::data::CFData::from_buffer(&system_version_data), propertylist::kCFPropertyListImmutable).unwrap();
+    let k = unsafe { propertylist::CFPropertyList::wrap_under_create_rule(list) } ;
+    let dict = unsafe { std::mem::transmute::<_,CFDictionary<CFType, CFType>>(k.downcast::<CFDictionary>().unwrap()) };
+    let version = dict.find(&CFString::new("ProductVersion").as_CFType()).as_ref().unwrap().downcast::<CFString>().unwrap();
+    let version = version.to_string();
+    match version.split(".").map(|x| x.parse().unwrap()).collect::<Vec<_>>()[..] {
+        [a, b, c] => (a, b, c),
+        _ => panic!()
+    }
+}
+
+#[test]
+fn copy_system_font() {
+    let small = unsafe {
+        CTFont::wrap_under_create_rule(
+            CTFontCreateUIFontForLanguage(kCTFontSystemDetailFontType, 19., std::ptr::null())
+        )
+    };
+    let big = small.clone_with_font_size(20.);
+    if macos_version() < (10, 15, 0) {
+        assert_ne!(big.url(), small.url());
+    } else {
+        assert_eq!(big.url(), small.url());
+    }
+}
