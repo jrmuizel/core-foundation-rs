@@ -694,4 +694,17 @@ fn copy_system_font() {
     } else {
         assert_eq!(big.url(), small.url());
     }
+    let ps = small.postscript_name();
+    println!("ps {}", ps);
+    let cgfont = CGFont::from_name(&CFString::new(&ps)).unwrap();
+    let cgfont = new_from_CGFont(&cgfont, 20.);
+    assert_eq!(small.postscript_name(), cgfont.postscript_name());
+
+    let desc = cgfont.copy_descriptor();
+
+    //assert_eq!(small.family_name(), cgfont.family_name());
+    let ctfont = new_from_descriptor(&desc, 20.);//new_from_name(&ps, 20.).unwrap();
+    assert_eq!(small.postscript_name(), ctfont.postscript_name());
+
+    assert!(false);
 }
